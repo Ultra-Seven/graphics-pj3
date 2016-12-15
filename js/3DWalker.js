@@ -23,6 +23,11 @@ var at = new Vector3(CameraPara.at);
 var up = new Vector3(CameraPara.up).normalize();
 var eyeDirection = VectorMinus(at, eye).normalize();
 var rightDirection = VectorCross(eyeDirection, up).normalize();
+// record time
+var currentTime = Date.now();
+var deltaTime;
+// record angle
+var currentAngle = 0.0;
 var status = {
     flashlight : false,
 
@@ -39,6 +44,40 @@ var floorTexture = {
 };
 //camera
 var camera = new Camera(CameraPara);
+document.onkeydown = function(e) {
+    var keyCode = e.which || e.keyCode;
+    keyStatus[keyCodeMap[keyCode]] = 1;
+};
+document.onkeyup = function(e) {
+    var keyCode = e.which || e.keyCode;
+    keyStatus[keyCodeMap[keyCode]] = 0;
+};
+var keyCodeMap = {
+    '87' : 'forward',
+    '83' : 'back',
+    '65' : 'left',
+    '68' : 'right',
+    '73' : 'up',
+    '75' : 'down',
+    '74' : 'leftRotate',
+    '76' : 'rightRotate',
+    '70' : 'pointLight',
+    '187' : 'increaseFog',
+    '189' : 'decreaseFog'
+};
+var keyStatus = {
+    forward : 0,
+    back : 0,
+    left : 0,
+    right : 0,
+    up : 0,
+    down : 0,
+    leftRotate : 0,
+    rightRotate : 0,
+    pointLight : 0,
+    increaseFog : 0,
+    decreaseFog : 0
+};
 function main() {
     var canvas = document.getElementById("webgl");
     var gl = getWebGLContext(canvas);
@@ -47,24 +86,23 @@ function main() {
         return;
     }
     //init shader
-    texProgram = createProgram(gl, gl, TEXTURE_VSHADER_SOURCE, TEXTURE_FSHADER_SOURCE);
+    texProgram = createProgram(gl, TEXTURE_VSHADER_SOURCE, TEXTURE_FSHADER_SOURCE);
     solidProgram = createProgram(gl, SOLID_VSHADER_SOURCE, SOLID_FSHADER_SOURCE);
     if (!solidProgram || !texProgram) {
         console.log('Failed to intialize shaders.');
         return;
     }
     // Get storage locations of attribute and uniform variables in program
-    texProgram.a_Position = gl.getAttribLocation(textureProgram, 'a_Position');
-    texProgram.a_TexCoord = gl.getAttribLocation(textureProgram, 'a_TexCoord');
-    texProgram.u_MvpMatrix = gl.getUniformLocation(textureProgram, 'u_MvpMatrix');
-    texProgram.u_ModelMatrix = gl.getUniformLocation(textureProgram, 'u_ModelMatrix');
-    texProgram.u_Eye = gl.getUniformLocation(textureProgram, 'u_Eye');
-    texProgram.u_Sampler = gl.getUniformLocation(textureProgram, 'u_Sampler');
-    texProgram.u_FogColor = gl.getUniformLocation(textureProgram, 'u_FogColor');
-    texProgram.u_FogDist = gl.getUniformLocation(textureProgram, 'u_FogDist');
-    texProgram.u_PointLightColor = gl.getUniformLocation(textureProgram, 'u_PointLightColor');
-    texProgram.u_AmbientLight = gl.getUniformLocation(textureProgram, 'u_AmbientLight');
-
+    texProgram.a_Position = gl.getAttribLocation(texProgram, 'a_Position');
+    texProgram.a_TexCoord = gl.getAttribLocation(texProgram, 'a_TexCoord');
+    texProgram.u_MvpMatrix = gl.getUniformLocation(texProgram, 'u_MvpMatrix');
+    texProgram.u_ModelMatrix = gl.getUniformLocation(texProgram, 'u_ModelMatrix');
+    texProgram.u_Eye = gl.getUniformLocation(texProgram, 'u_Eye');
+    texProgram.u_Sampler = gl.getUniformLocation(texProgram, 'u_Sampler');
+    texProgram.u_PointLightColor = gl.getUniformLocation(texProgram, 'u_PointLightColor');
+    texProgram.u_AmbientLight = gl.getUniformLocation(texProgram, 'u_AmbientLight');
+    texProgram.u_FogColor = gl.getUniformLocation(texProgram, 'u_FogColor');
+    texProgram.u_FogDist = gl.getUniformLocation(texProgram, 'u_FogDistance');
     solidProgram.a_Position = gl.getAttribLocation(solidProgram, 'a_Position');
     solidProgram.a_Color = gl.getAttribLocation(solidProgram, 'a_Color');
     solidProgram.a_Normal = gl.getAttribLocation(solidProgram, 'a_Normal');
@@ -76,19 +114,16 @@ function main() {
     solidProgram.u_PointLightColor = gl.getUniformLocation(solidProgram, 'u_PointLightColor');
     solidProgram.u_PointLightPosition = gl.getUniformLocation(solidProgram, 'u_PointLightPosition');
     solidProgram.u_FogColor = gl.getUniformLocation(solidProgram, 'u_FogColor');
-    solidProgram.u_FogDist = gl.getUniformLocation(solidProgram, 'u_FogDist');
-
+    solidProgram.u_FogDist = gl.getUniformLocation(solidProgram, 'u_FogDistance');
     if (texProgram.a_Position < 0 || texProgram.a_TexCoord < 0
         || !texProgram.u_MvpMatrix || !texProgram.u_ModelMatrix
-        || !texProgram.u_Eye || !texProgram.u_Sampler || !texProgram.u_FogColor
-        || !texProgram.u_FogDist || !texProgram.u_PointLightColor
+        || !texProgram.u_Eye || !texProgram.u_Sampler || !texProgram.u_PointLightColor
         || !texProgram.u_AmbientLight || solidProgram.a_Position < 0
         || solidProgram.a_Color < 0 || solidProgram.a_Normal < 0
         || !solidProgram.u_MvpMatrix || !solidProgram.u_NormalMatrix
         || !solidProgram.u_ModelMatrix || !solidProgram.u_AmbientLight
         || !solidProgram.u_DirectionLight || !solidProgram.u_PointLightColor
-        || !solidProgram.u_PointLightPosition || !solidProgram.u_FogColor
-        || !solidProgram.u_FogDist) {
+        || !solidProgram.u_PointLightPosition || !solidProgram.u_FogColor || !solidProgram.u_FogDist) {
         console.log('Failed to get the storage location of attribute or uniform variable');
         return;
     }
@@ -100,21 +135,20 @@ function main() {
         console.log('Failed to intialize the floor texture.');
         return;
     }
-    //TODO: save box texture and floor texture
-
-    // Initialize vertex buffers for every solid article.
-    for (var i = 0; i < ObjectList.length; i++) {
-        ObjectList[i].model = initVertexBuffers(gl, solidProgram);
-        if (!ObjectList[i].model) {
-            console.log('Failed to set the vertex information');
-            return;
-        }
-        readOBJFile(ObjectList[i].objFilePath, gl, ObjectList[i], 1.0, true);
-    }
     initVertexBuffersForTexureObject(gl, boxRes);
     initVertexBuffersForTexureObject(gl, floorRes);
     boxRes.texureObject = boxTexture;
     floorRes.texureObject = floorTexture;
+    // Initialize vertex buffers for every solid article.
+    for (var i = 0; i < ObjectList.length; i++) {
+        ObjectList[i].model = initVertexBuffers(gl, solidProgram);
+        if (!ObjectList[i].model) {
+            console.log('Failed to set the vertex information in object[' + i + ']');
+            return;
+        }
+        readOBJFile(ObjectList[i].objFilePath, gl, ObjectList[i], 1.0, true);
+    }
+
     // Model matrix
     modelMatrix = new Matrix4();
     // View matrix
@@ -154,7 +188,7 @@ function initTextures(gl, textureObject, imagePath, program) {
     return true;
 }
 // This function is to load texture for a textureObject.
-function loadTexture(gl, textureObject, image) {
+function loadTexture(gl, textureObject, u_Sampler, image) {
     // Flip the image's y axis
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
     // Enable texture unit
@@ -170,19 +204,20 @@ function loadTexture(gl, textureObject, image) {
 }
 
 function initVertexBuffers(gl, program) {
-    var object = new ObjectEntity(createEmptyArrayBuffer(gl, program.a_Position, 3, gl.FLOAT),
-        createEmptyArrayBuffer(gl, program.a_Normal, 3, gl.FLOAT),
-        createEmptyArrayBuffer(gl, program.a_Color, 4, gl.FLOAT),
-        gl.createBuffer()
-    );
-    if (!object.vertexBuffer || !object.normalBuffer || !object.indexBuffer) {
+    var o = new Object();
+    o.vertexBuffer = createEmptyArrayBuffer(gl, program.a_Position, 3, gl.FLOAT);
+    o.normalBuffer = createEmptyArrayBuffer(gl, program.a_Normal, 3, gl.FLOAT);
+    o.colorBuffer = createEmptyArrayBuffer(gl, program.a_Color, 4, gl.FLOAT);
+    o.indexBuffer = gl.createBuffer();
+    if (!o.vertexBuffer || !o.normalBuffer || !o.indexBuffer) {
         return null;
     }
+    // Unbind the buffer object
     gl.bindBuffer(gl.ARRAY_BUFFER, null);
-    return object;
+    return o;
 }
 // Create a buffer object, assign it to attribute variables, and enable the assignment
-function createEmptyArrayBuffer(gl, a_attribute, number, type) {
+function createEmptyArrayBuffer(gl, a_attribute, num, type) {
     var buffer = gl.createBuffer();
     if (!buffer) {
         console.log('Failed to create the buffer object');
@@ -190,63 +225,64 @@ function createEmptyArrayBuffer(gl, a_attribute, number, type) {
     }
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     // Assign the buffer object to the attribute variable
-    gl.vertexAttribPointer(a_attribute, number, type, false, 0, 0);
+    gl.vertexAttribPointer(a_attribute, num, type, false, 0, 0);
     // Enable the assignment
     gl.enableVertexAttribArray(a_attribute);
     // Keep the information necessary to assign to the attribute variable later
-    buffer.number = number;
+    buffer.num = num;
     buffer.type = gl.FLOAT;
+
     return buffer;
 }
 function readOBJFile(objFilePath, gl, objectList, number, b) {
     var request = new XMLHttpRequest();
     request.onreadystatechange = function() {
         if (request.readyState === 4 && request.status !== 404) {
-            onReadOBJFile(request.responseText, fileName, gl, model, scale,
-                reverse);
+            onReadOBJFile(request.responseText, objFilePath, gl, objectList, number,
+                b);
         }
     };
     // Create a request to acquire the file.
-    request.open('GET', fileName, true);
+    request.open('GET', objFilePath, true);
     // Send the request
     request.send();
 }
 // OBJ File has been read
 function onReadOBJFile(fileString, fileName, gl, o, scale, reverse) {
     var objDoc = new OBJDoc(fileName);  // Create a OBJDoc object
-    objDoc.color.push(1.0); // Set color.
-    objDoc.defaultColor = objDoc.color;
+    o.color.push(1.0); // Set color.
+    objDoc.defaultColor = o.color;
     var result = objDoc.parse(fileString, scale, reverse); // Parse the file
     if (!result) {
-        objDoc.objDoc = null;
-        objDoc.drawingInfo = null;
+        o.objDoc = null;
+        o.drawingInfo = null;
         console.log("OBJ file parsing error.");
         return;
     }
-    objDoc.objDoc = objDoc;
+    o.objDoc = objDoc;
 }
 function draw(gl, canvas) {
     drawTexture(gl, canvas);
     drawSolid(gl, canvas);
 }
-function calculateCameraParameters(number, number2) {
+function calculateCameraParameters(move, rotate) {
     var angle = rotate * Math.PI / 180.0;
-    if (keypressStatus.forward || keypressStatus.back) {
-        var deltaVector = keypressStatus.forward ? eyeDirection
+    if (keyStatus.forward || keyStatus.back) {
+        var deltaVector = keyStatus.forward ? eyeDirection
             : VectorReverse(eyeDirection);
         deltaVector = VectorMultNum(deltaVector, move);
         at = VectorAdd(at, deltaVector);
         eye = VectorAdd(eye, deltaVector);
     }
-    if (keypressStatus.left || keypressStatus.right) {
-        var deltaVector = keypressStatus.right ? rightDirection
+    if (keyStatus.left || keyStatus.right) {
+        var deltaVector = keyStatus.right ? rightDirection
             : VectorReverse(rightDirection);
         deltaVector = VectorMultNum(deltaVector, move);
         at = VectorAdd(at, deltaVector);
         eye = VectorAdd(eye, deltaVector);
     }
-    if (keypressStatus.leftRotate || keypressStatus.rightRotate) {
-        var deltaVector = keypressStatus.rightRotate ? rightDirection
+    if (keyStatus.leftRotate || keyStatus.rightRotate) {
+        var deltaVector = keyStatus.rightRotate ? rightDirection
             : VectorReverse(rightDirection);
         deltaVector = VectorMultNum(deltaVector, Math.tan(angle));
         eyeDirection = VectorAdd(eyeDirection, deltaVector);
@@ -254,8 +290,8 @@ function calculateCameraParameters(number, number2) {
         at = VectorAdd(eye, eyeDirection);
         rightDirection = VectorCross(eyeDirection, up).normalize();
     }
-    if (keypressStatus.up || keypressStatus.down) {
-        var deltaVector = keypressStatus.up ? up : VectorReverse(up);
+    if (keyStatus.up || keyStatus.down) {
+        var deltaVector = keyStatus.up ? up : VectorReverse(up);
         deltaVector = VectorMultNum(deltaVector, Math.tan(angle));
         eyeDirection = VectorAdd(eyeDirection, deltaVector);
         eyeDirection.normalize();
@@ -264,23 +300,38 @@ function calculateCameraParameters(number, number2) {
         up.normalize();
     }
 }
+function getElapsedTime() {
+    var newTime = Date.now();
+    var elapsedTime = newTime - currentTime;
+    currentTime = newTime;
+    return elapsedTime;
+}
+var fogColor = [0.8, 0.8, 0.8];
+var fogDist = [70, 80];
 function drawTexture(gl, canvas) {
-    // Switch shader program.
     gl.useProgram(texProgram);
-    // Set ambient light color.
+    // set ambient light.
     gl.uniform3fv(texProgram.u_AmbientLight, sceneAmbientLight);
     if (keyStatus.pointLight) {
         gl.uniform3fv(texProgram.u_PointLightColor, scenePointLightColor);
     } else {
         gl.uniform3f(texProgram.u_PointLightColor, 0.0, 0.0, 0.0);
     }
-    // Set eye position.
+
+    // set eye position.
     gl.uniform4f(texProgram.u_Eye, eye.elements[0], eye.elements[1],
         eye.elements[2], 1.0);
-
+    // fog color
+    gl.uniform3fv(texProgram.u_FogColor, fogColor);
+    gl.uniform2fv(texProgram.u_FogDist, fogDist);
+    gl.clearColor(fogColor[0], fogColor[1], fogColor[2], 1.0); // Color of Fog
+    gl.enable(gl.DEPTH_TEST);
+    // clear color and depth buffer
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    deltaTime = getElapsedTime();
+    fogDensity();
     // Calculate camera parameters.
-    calculateCameraParameters((MOVE_VELOCITY * deltaTime) / 1000.0,
-        (ROT_VELOCITY * deltaTime) / 1000.0);
+    calculateCameraParameters((MOVE_VELOCITY * deltaTime) / 1000.0, (ROT_VELOCITY * deltaTime) / 1000.0);
     // Calculate the view matrix and the projection matrix
     viewMatrix.setLookAt(eye.elements[0], eye.elements[1], eye.elements[2],
         at.elements[0], at.elements[1], at.elements[2], up.elements[0],
@@ -291,16 +342,26 @@ function drawTexture(gl, canvas) {
     viewProjMatrix.set(projMatrix).multiply(viewMatrix);
 
     //draw texture article
-    drawTextureArticle(boxRes);
-    drawTextureArticle(floorRes);
+    drawTextureArticle(boxRes, gl);
+    drawTextureArticle(floorRes, gl);
 
+}
+function fogDensity() {
+    if (keyStatus.decreaseFog) {
+        fogDist[1] ++;
+    }
+    else if (keyStatus.increaseFog) {
+        if (fogDist[1] > fogDist[0]) {
+            fogDist[1] --;
+        }
+    }
 }
 function initAttributeVariable(gl, a_attribute, buffer) {
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     gl.vertexAttribPointer(a_attribute, buffer.num, buffer.type, false, 0, 0);
     gl.enableVertexAttribArray(a_attribute);
 }
-function drawTextureArticle(textureArticle) {
+function drawTextureArticle(textureArticle, gl) {
     // If texture image is not loaded
     if (textureArticle.texureObject.isTextureImageReady) {
         // Calculate and set model matrix.
@@ -311,20 +372,20 @@ function drawTextureArticle(textureArticle) {
         mvpMatrix.set(viewProjMatrix).multiply(modelMatrix);
         gl.uniformMatrix4fv(texProgram.u_MvpMatrix, false, mvpMatrix.elements);
         // Initialize texture variables.
-        initAttributeVariable(gl, texProgram.a_Position, texProgram.vertexBuffer);
-        initAttributeVariable(gl, texProgram.a_TexCoord, texProgram.texCoordBuffer);
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, texProgram.indexBuffer);
-        gl.bindTexture(gl.TEXTURE_2D, texProgram.texureObject.texture);
+        initAttributeVariable(gl, texProgram.a_Position, textureArticle.vertexBuffer);
+        initAttributeVariable(gl, texProgram.a_TexCoord, textureArticle.texCoordBuffer);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, textureArticle.indexBuffer);
+        gl.bindTexture(gl.TEXTURE_2D, textureArticle.texureObject.texture);
         // Set the texture unit number to the sampler
-        gl.uniform1i(textureProgram.u_Sampler, texProgram.texureObject.textureUnitID);
-        gl.drawElements(gl.TRIANGLES, texProgram.numIndices, texProgram.indexBuffer.type, 0);
+        gl.uniform1i(texProgram.u_Sampler, textureArticle.texureObject.textureUnitID);
+        gl.drawElements(gl.TRIANGLES, textureArticle.numIndices, textureArticle.indexBuffer.type, 0);
     }
 }
 function drawSolid(gl, canvas) {
     // Switch shader program.
     gl.useProgram(solidProgram);
     // If flash light is true, set scenePointLightColor to u_PointLightColor.Otherwise, use black color.
-    if (status.flashlight) {
+    if (status.pointLight) {
         gl.uniform3fv(solidProgram.u_PointLightColor, scenePointLightColor);
     } else {
         gl.uniform3f(solidProgram.u_PointLightColor, 0.0, 0.0, 0.0);
@@ -336,16 +397,17 @@ function drawSolid(gl, canvas) {
     directionLight.normalize();
     gl.uniform3fv(solidProgram.u_DirectionLight, directionLight.elements);
     // Set point the position of light
-    gl.uniform4f(solidProgram.u_PointLightPosition, eye.elements[0],
-        eye.elements[1], eye.elements[2], 1.0);
+    gl.uniform4f(solidProgram.u_PointLightPosition, eye.elements[0], eye.elements[1], eye.elements[2], 1.0);
+    gl.uniform3fv(solidProgram.u_FogColor, fogColor); // fog colors
+    // Starting point and end point
+    gl.uniform2fv(solidProgram.u_FogDist, fogDist);
     for(var i = 0; i < ObjectList.length; i++) {
-        drawObject(ObjectList[i]);
+        drawObject(ObjectList[i], gl);
     }
 }
-function drawObject(solidArticle) {
+function drawObject(solidArticle, gl) {
     if (solidArticle.objDoc != null && solidArticle.objDoc.isMTLComplete()) {
-        solidArticle.drawingInfo = onReadComplete(gl, solidArticle.model,
-            solidArticle.objDoc);
+        solidArticle.drawingInfo = onReadComplete(gl, solidArticle.model, solidArticle.objDoc);
         solidArticle.objname = solidArticle.objDoc.objects[0].name;
         solidArticle.objDoc = null;
     }
@@ -359,21 +421,16 @@ function drawObject(solidArticle) {
                     // Calculate new currentAngle to make an animation.
                     currentAngle = (currentAngle + (90.0 * deltaTime) / 1000.0) % 360.0;
                     var angle = currentAngle * Math.PI / 180.0;
-                    modelMatrix.translate(10.0 * Math.sin(angle),
-                        5.0 + 2 * Math.sin(angle * 2), 12.0 * Math
-                            .cos(angle));
+                    modelMatrix.translate(10.0 * Math.sin(angle), 5.0 + 2 * Math.sin(angle * 2), 12.0 * Math.cos(angle));
                     modelMatrix.rotate(currentAngle, 0.0, 1.0, 0.0);
                 } else {
                     modelMatrix.translate(transform.content[0],
                         transform.content[1], transform.content[2]);
                 }
             } else if (transform.type === "rotate") {
-                modelMatrix.rotate(transform.content[0],
-                    transform.content[1], transform.content[2],
-                    transform.content[3]);
+                modelMatrix.rotate(transform.content[0], transform.content[1], transform.content[2], transform.content[3]);
             } else if (transform.type === "scale") {
-                modelMatrix.scale(transform.content[0],
-                    transform.content[1], transform.content[2]);
+                modelMatrix.scale(transform.content[0], transform.content[1], transform.content[2]);
             }
         }
         // set model matrix
