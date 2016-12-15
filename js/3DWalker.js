@@ -103,6 +103,8 @@ function main() {
     texProgram.u_AmbientLight = gl.getUniformLocation(texProgram, 'u_AmbientLight');
     texProgram.u_FogColor = gl.getUniformLocation(texProgram, 'u_FogColor');
     texProgram.u_FogDist = gl.getUniformLocation(texProgram, 'u_FogDistance');
+    texProgram.u_Floor = gl.getUniformLocation(texProgram, 'u_Floor');
+
     solidProgram.a_Position = gl.getAttribLocation(solidProgram, 'a_Position');
     solidProgram.a_Color = gl.getAttribLocation(solidProgram, 'a_Color');
     solidProgram.a_Normal = gl.getAttribLocation(solidProgram, 'a_Normal');
@@ -123,7 +125,8 @@ function main() {
         || !solidProgram.u_MvpMatrix || !solidProgram.u_NormalMatrix
         || !solidProgram.u_ModelMatrix || !solidProgram.u_AmbientLight
         || !solidProgram.u_DirectionLight || !solidProgram.u_PointLightColor
-        || !solidProgram.u_PointLightPosition || !solidProgram.u_FogColor || !solidProgram.u_FogDist) {
+        || !solidProgram.u_PointLightPosition || !solidProgram.u_FogColor || !solidProgram.u_FogDist
+        || !texProgram.u_Floor) {
         console.log('Failed to get the storage location of attribute or uniform variable');
         return;
     }
@@ -326,8 +329,8 @@ function drawTexture(gl, canvas) {
     gl.uniform2fv(texProgram.u_FogDist, fogDist);
     gl.clearColor(fogColor[0], fogColor[1], fogColor[2], 1.0); // Color of Fog
     gl.enable(gl.DEPTH_TEST);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     // clear color and depth buffer
-    gl.clear(gl.COLOR_BUFFER_BIT);
     deltaTime = getElapsedTime();
     fogDensity();
     // Calculate camera parameters.
@@ -363,6 +366,12 @@ function initAttributeVariable(gl, a_attribute, buffer) {
 }
 function drawTextureArticle(textureArticle, gl) {
     // If texture image is not loaded
+    if (textureArticle == floorRes) {
+        gl.uniform2fv(texProgram.u_Floor, [2.0, 2.0]);
+    }
+    else {
+        gl.uniform2fv(texProgram.u_Floor, [0.0, 0.0]);
+    }
     if (textureArticle.texureObject.isTextureImageReady) {
         // Calculate and set model matrix.
         modelMatrix.setTranslate(textureArticle.translate[0], textureArticle.translate[1], textureArticle.translate[2]);

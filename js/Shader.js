@@ -23,15 +23,21 @@ var TEXTURE_FSHADER_SOURCE =
     "varying float v_Dist;\n" +
     "uniform vec3 u_FogColor;\n" +
     "uniform vec2 u_FogDistance;\n" +
+    "uniform vec2 u_Floor;\n" +
     "void main() {\n" +
     "vec4 color = texture2D(u_Sampler, v_TexCoord);\n" +
     // Calculate the color due to ambient reflection
     "vec3 ambient = u_AmbientLight * color.rgb;\n" +
     // Calculate the color due to diffuse reflection
     "vec3 diffuse = u_PointLightColor * color.rgb;\n" +
-    "float fog = (u_FogDistance.y - v_Dist) / (u_FogDistance.y - u_FogDistance.x);\n" +
     "vec3 light = vec3(color.rgb + ambient + diffuse);\n" +
+    "if (u_Floor.x < 3.0) {\n" +
+    "float fog = (u_FogDistance.y - v_Dist) / (u_FogDistance.y - u_FogDistance.x);\n" +
     "gl_FragColor = vec4(mix(u_FogColor, light, clamp(fog, 0.0, 1.0)), color.a);\n" +
+    "}\n" +
+    "else {\n" +
+    "gl_FragColor = vec4(light, color.a);\n" +
+    "}\n" +
     "}\n";
 var SOLID_VSHADER_SOURCE =
     "attribute vec4 a_Position;\n" +
@@ -82,3 +88,27 @@ var SOLID_FSHADER_SOURCE =
     "vec3 color = mix(u_FogColor, vec3(v_Color), clamp(fog, 0.0, 1.0));\n" +
     "gl_FragColor = vec4(color, v_Color.a);\n" +
     "}\n";
+
+var SKYBOX_VSHADER_SOURCE = `
+attribute vec2 a_Position;
+uniform vec3 u_CameraUp;
+uniform vec3 u_CameraDirection;
+uniform float u_CameraNear;
+
+varying vec3 v_Position;
+
+void main() {
+    gl_Position = vec4(a_Position, 0.0, 1.0);
+    vec3 u_CameraRight = normalize(cross(u_CameraDirection, u_CameraUp));
+    v_Position = a_Position[0] * u_CameraRight + a_Position[1] * u_CameraUp + u_CameraNear * u_CameraDirection;
+}
+`;
+var SOLID_FSHADER_SOURCE = `
+    varying vec3 v_Position;
+    uniform samplerCube u_Cubemap;
+
+    void main() {
+      vec3 dir = normalize(v_Position);
+      gl_FragColor = textureCube(u_Cubemap, vec3(-1.0, 1.0, -1.0) * dir);
+    }
+`;
