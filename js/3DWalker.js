@@ -3,6 +3,7 @@
  */
 var solidProgram;
 var texProgram;
+var skyProgram;
 //model matrix
 var modelMatrix;
 // View matrix
@@ -28,6 +29,10 @@ var currentTime = Date.now();
 var deltaTime;
 // record angle
 var currentAngle = 0.0;
+var sky;
+var skyTarget;
+var frameBuffer;
+var renderBuffer;
 var status = {
     flashlight : false,
 
@@ -38,6 +43,11 @@ var boxTexture = {
     textureUnitID : 0
 };
 var floorTexture = {
+    texture : null,
+    isTextureImageReady : false,
+    textureUnitID : 1
+};
+var skyTexture = {
     texture : null,
     isTextureImageReady : false,
     textureUnitID : 1
@@ -88,7 +98,8 @@ function main() {
     //init shader
     texProgram = createProgram(gl, TEXTURE_VSHADER_SOURCE, TEXTURE_FSHADER_SOURCE);
     solidProgram = createProgram(gl, SOLID_VSHADER_SOURCE, SOLID_FSHADER_SOURCE);
-    if (!solidProgram || !texProgram) {
+    skyProgram = createProgram(gl, SKYBOX_VSHADER_SOURCE, SKYBOX_FSHADER_SOURCE);
+    if (!solidProgram || !texProgram || !skyProgram) {
         console.log('Failed to intialize shaders.');
         return;
     }
@@ -117,6 +128,14 @@ function main() {
     solidProgram.u_PointLightPosition = gl.getUniformLocation(solidProgram, 'u_PointLightPosition');
     solidProgram.u_FogColor = gl.getUniformLocation(solidProgram, 'u_FogColor');
     solidProgram.u_FogDist = gl.getUniformLocation(solidProgram, 'u_FogDistance');
+    solidProgram.u_LightMat = gl.getUniformLocation(solidProgram, 'u_LightMat');
+
+    skyProgram.a_Position = gl.getAttribLocation(skyProgram, 'a_Position');
+    skyProgram.u_CameraUp = gl.getUniformLocation(skyProgram, 'u_CameraUp');
+    skyProgram.u_CameraDirection = gl.getUniformLocation(skyProgram, 'u_CameraDirection');
+    skyProgram.u_CameraNear = gl.getUniformLocation(skyProgram, 'u_CameraNear');
+    skyProgram.u_Cubemap = gl.getUniformLocation(skyProgram, 'u_Cubemap');
+
     if (texProgram.a_Position < 0 || texProgram.a_TexCoord < 0
         || !texProgram.u_MvpMatrix || !texProgram.u_ModelMatrix
         || !texProgram.u_Eye || !texProgram.u_Sampler || !texProgram.u_PointLightColor
@@ -140,6 +159,15 @@ function main() {
     }
     initVertexBuffersForTexureObject(gl, boxRes);
     initVertexBuffersForTexureObject(gl, floorRes);
+    skyTarget = [gl.TEXTURE_CUBE_MAP_POSITIVE_X,
+        gl.TEXTURE_CUBE_MAP_NEGATIVE_X,
+        gl.TEXTURE_CUBE_MAP_POSITIVE_Y,
+        gl.TEXTURE_CUBE_MAP_NEGATIVE_Y,
+        gl.TEXTURE_CUBE_MAP_POSITIVE_Z,
+        gl.TEXTURE_CUBE_MAP_NEGATIVE_Z];
+    sky = new SkyBox(skyBox, gl);
+    frameBuffer = gl.createFramebuffer();
+    renderBuffer = gl.createRenderbuffer();
     boxRes.texureObject = boxTexture;
     floorRes.texureObject = floorTexture;
     // Initialize vertex buffers for every solid article.
@@ -264,10 +292,14 @@ function onReadOBJFile(fileString, fileName, gl, o, scale, reverse) {
     }
     o.objDoc = objDoc;
 }
+
 function draw(gl, canvas) {
+    drawSkyBox(gl, canvas);
+
     drawTexture(gl, canvas);
     drawSolid(gl, canvas);
 }
+
 function calculateCameraParameters(move, rotate) {
     var angle = rotate * Math.PI / 180.0;
     if (keyStatus.forward || keyStatus.back) {
@@ -309,7 +341,7 @@ function getElapsedTime() {
     currentTime = newTime;
     return elapsedTime;
 }
-var fogColor = [0.8, 0.8, 0.8];
+var fogColor = [0.1, 0.1, 0.11];
 var fogDist = [70, 80];
 function drawTexture(gl, canvas) {
     gl.useProgram(texProgram);
@@ -322,14 +354,13 @@ function drawTexture(gl, canvas) {
     }
 
     // set eye position.
-    gl.uniform4f(texProgram.u_Eye, eye.elements[0], eye.elements[1],
-        eye.elements[2], 1.0);
+    gl.uniform4f(texProgram.u_Eye, eye.elements[0], eye.elements[1], eye.elements[2], 1.0);
     // fog color
     gl.uniform3fv(texProgram.u_FogColor, fogColor);
     gl.uniform2fv(texProgram.u_FogDist, fogDist);
     gl.clearColor(fogColor[0], fogColor[1], fogColor[2], 1.0); // Color of Fog
     gl.enable(gl.DEPTH_TEST);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    //gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     // clear color and depth buffer
     deltaTime = getElapsedTime();
     fogDensity();
@@ -345,8 +376,8 @@ function drawTexture(gl, canvas) {
     viewProjMatrix.set(projMatrix).multiply(viewMatrix);
 
     //draw texture article
-    drawTextureArticle(boxRes, gl);
     drawTextureArticle(floorRes, gl);
+    drawTextureArticle(boxRes, gl);
 
 }
 function fogDensity() {
@@ -359,6 +390,7 @@ function fogDensity() {
         }
     }
 }
+
 function initAttributeVariable(gl, a_attribute, buffer) {
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     gl.vertexAttribPointer(a_attribute, buffer.num, buffer.type, false, 0, 0);
@@ -456,9 +488,34 @@ function drawObject(solidArticle, gl) {
         initAttributeVariable(gl, solidProgram.a_Position, solidArticle.model.vertexBuffer);
         initAttributeVariable(gl, solidProgram.a_Normal, solidArticle.model.normalBuffer);
         initAttributeVariable(gl, solidProgram.a_Color, solidArticle.model.colorBuffer);
+
+        //initLight(gl);
+
+
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, solidArticle.model.indexBuffer);
         gl.drawElements(gl.TRIANGLES, solidArticle.drawingInfo.indices.length, gl.UNSIGNED_SHORT, 0);
     }
+}
+function initLight(gl) {
+    // let sceneLight = {
+    //     direction: new Vector3(sceneDirectionLight).normalize(),
+    //     color: new Float32Array(sceneAmbientLight)
+    // };
+    // let lightUp = new Vector3([0, 1, 0]).cross(sceneLight.direction).normalize();
+    //
+    // let eye = new Vector3(CameraPara.eye).plus(new Vector3(sceneLight.direction).mul(128));
+    // let at = new Vector3(eye).minus(sceneLight.direction);
+    let mat = new Matrix4().setOrtho(-25, 16, -32, 32, -256, 256)
+        .lookAt(eye.elements[0], eye.elements[1], eye.elements[2],
+            at.elements[0], at.elements[1], at.elements[2],
+            up.elements[0], up.elements[1], up.elements[2])
+        .translate(10, 0, 60);
+
+    gl.uniformMatrix4fv(solidProgram.u_LightMat, false, mat.elements);
+}
+function drawSkyBox(gl, canvas) {
+    gl.useProgram(skyProgram);
+    sky.render(modelMatrix, false, gl);
 }
 // OBJ File has been read compreatly
 function onReadComplete(gl, model, objDoc) {

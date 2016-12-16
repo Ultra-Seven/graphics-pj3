@@ -30,7 +30,7 @@ var floorRes ={
 		scale: [100.0,1.0,100.0],
 		//地面所对应的纹理图片文件的路径
 		texImagePath : "./image/floor.jpg"
-	}
+	};
 
 //箱子模型的相关信息，具体含义和地面相同
 var boxRes = {
