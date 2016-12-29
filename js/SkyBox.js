@@ -8,13 +8,13 @@ class SkyBox {
         this.loadComplete = false;
         this.buffer = gl.createBuffer();
         this.data = new Float32Array([1.0, 1.0, 1.0, -1.0, -1.0, 1.0, -1.0, -1.0]);
-        for (var imageSrc of config) {
-            var image = new Image();
+        for (let imageSrc of config) {
+            const image = new Image();
             image.onload = () => {
                 if (++this.loadCnt < 6) {
                     return;
                 }
-                var texture = gl.createTexture();
+                const texture = gl.createTexture();
                 gl.activeTexture(gl.TEXTURE3);
                 gl.bindTexture(gl.TEXTURE_CUBE_MAP, texture);
                 for (let i = 0; i < 6; i++) {
@@ -31,7 +31,6 @@ class SkyBox {
 
     render(transform, renderShadow, gl) {
         if (!this.loadComplete) {
-            console.log("haven't load completely");
             return;
         }
         gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
@@ -42,13 +41,13 @@ class SkyBox {
         gl.uniform1i(skyProgram.u_Cubemap, 3);
         gl.uniform3fv(skyProgram.u_CameraUp, CameraPara.up.elements);
 
-        var direction = VectorMinus(at, eye).normalize();
+        const direction = VectorMinus(at, eye).normalize();
 
         gl.uniform3fv(skyProgram.u_CameraDirection, direction.elements);
         gl.uniform1f(skyProgram.u_CameraNear, 1.5);
 
         gl.disable(gl.DEPTH_TEST);
-        //gl.disable(gl.CULL_FACE);
+        gl.disable(gl.CULL_FACE);
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         gl.enable(gl.DEPTH_TEST);
         //gl.enable(gl.CULL_FACE);
