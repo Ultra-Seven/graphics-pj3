@@ -8,7 +8,7 @@ class SkyBox {
         this.loadComplete = false;
         this.buffer = gl.createBuffer();
         this.data = new Float32Array([1.0, 1.0, 1.0, -1.0, -1.0, 1.0, -1.0, -1.0]);
-        for (let imageSrc of config) {
+        for (let index = 0; index < 6; index++) {
             const image = new Image();
             image.onload = () => {
                 if (++this.loadCnt < 6) {
@@ -18,15 +18,17 @@ class SkyBox {
                 gl.activeTexture(gl.TEXTURE3);
                 gl.bindTexture(gl.TEXTURE_CUBE_MAP, texture);
                 for (let i = 0; i < 6; i++) {
+                    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
                     gl.texImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.loadImg[i]);
                 }
                 gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
                 gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
                 this.loadComplete = true;
             };
-            image.src = imageSrc;
-            this.loadImg.push(image);
+            image.src = config[index];
+            this.loadImg[index] = image;
         }
+
     }
 
     render(transform, renderShadow, gl) {

@@ -77,17 +77,17 @@ var boxRes = {
 	translate: [0.0,8.0,-30.0],
 	//箱子纹理图片的路径，所有6个面都贴这一张纹理
 	texImagePath : "./image/boxface.bmp"
-}
+};
 
 //相机的初始参数信息，相机宽高比和canvas宽高比相同
-CameraPara = {
+var CameraPara = {
 	fov:30.0,
 	near:0.1,
 	far:300,
 	eye:[0.0,5.0,48.0],
 	at:[0.0,5.0,43.0],
 	up:[0.0,1.0,0.0],
-}
+};
 
 //漫游过程中，相机的移动速度
 var MOVE_VELOCITY = 30;//0.01;
@@ -172,11 +172,11 @@ var sceneDirectionLight = [-0.35, 0.35, 0.87];
 
 //点光源的颜色，点光源的位置应当实时与相机位置（eye）相同
 var scenePointLightColor = [0.5, 0.5, 0.6];
-var skyBox = [
-	'./image/moondust_ft.png',
-	'./image/moondust_bk.png',
-	'./image/moondust_up.png',
-	'./image/moondust_dn.png',
-	'./image/moondust_rt.png',
-	'./image/moondust_lf.png'
+const skyBox = [
+    './image/moondust_ft.png',
+    './image/moondust_bk.png',
+    './image/moondust_up.png',
+    './image/moondust_dn.png',
+    './image/moondust_rt.png',
+    './image/moondust_lf.png'
 ];

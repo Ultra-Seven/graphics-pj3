@@ -2,7 +2,7 @@
  * Created by Administrator on 2016/12/13.
  */
 const OFFSCREEN_WIDTH = 2048, OFFSCREEN_HEIGHT = 2048;
-const LIGHT_X = 4, LIGHT_Y = 0, LIGHT_Z = -0.5; // Light position(x, y, z)
+const LIGHT_X = 0.0, LIGHT_Y = 35.0, LIGHT_Z = 5; // Light position(x, y, z)
 let solidProgram;
 let texProgram;
 let skyProgram;
@@ -35,7 +35,7 @@ let deltaTime;
 // record angle
 let currentAngle = 0.0;
 let sky;
-let skyTarget;
+
 let fbo;
 let g_mvpMatrix = new Matrix4();
 const status = {
@@ -136,7 +136,8 @@ function main() {
     solidProgram.u_ShadowMap = gl.getUniformLocation(solidProgram, 'u_ShadowMap');
     solidProgram.u_FogColor = gl.getUniformLocation(solidProgram, 'u_FogColor');
     solidProgram.u_FogDist = gl.getUniformLocation(solidProgram, 'u_FogDistance');
-    solidProgram.u_LightMat = gl.getUniformLocation(solidProgram, 'u_LightMat');
+    //solidProgram.u_LightMat = gl.getUniformLocation(solidProgram, 'u_LightMat');
+    solidProgram.u_lightPosition = gl.getUniformLocation(solidProgram, 'lightPos');
 
     skyProgram.a_Position = gl.getAttribLocation(skyProgram, 'a_Position');
     skyProgram.u_CameraUp = gl.getUniformLocation(skyProgram, 'u_CameraUp');
@@ -162,7 +163,7 @@ function main() {
         || !solidProgram.u_ModelMatrix || !solidProgram.u_AmbientLight
         || !solidProgram.u_DirectionLight || !solidProgram.u_PointLightColor
         || !solidProgram.u_PointLightPosition || !solidProgram.u_FogColor || !solidProgram.u_FogDist
-        || !texProgram.u_Floor || !texProgram.u_ShadowMap || !solidProgram.u_ShadowMap) {
+        || !texProgram.u_Floor || !texProgram.u_ShadowMap || !solidProgram.u_ShadowMap || !solidProgram.u_lightPosition) {
         console.log('Failed to get the storage location of attribute or uniform variable');
         return;
     }
@@ -176,12 +177,6 @@ function main() {
     }
     initVertexBuffersForTexureObject(gl, boxRes);
     initVertexBuffersForTexureObject(gl, floorRes);
-    skyTarget = [gl.TEXTURE_CUBE_MAP_POSITIVE_X,
-        gl.TEXTURE_CUBE_MAP_NEGATIVE_X,
-        gl.TEXTURE_CUBE_MAP_POSITIVE_Y,
-        gl.TEXTURE_CUBE_MAP_NEGATIVE_Y,
-        gl.TEXTURE_CUBE_MAP_POSITIVE_Z,
-        gl.TEXTURE_CUBE_MAP_NEGATIVE_Z];
     sky = new SkyBox(skyBox, gl);
     boxRes.texureObject = boxTexture;
     floorRes.texureObject = floorTexture;
@@ -199,8 +194,13 @@ function main() {
         console.log('Failed to initialize frame buffer object');
         return;
     }
+    gl.activeTexture(gl.TEXTURE9); // Set a texture object to the texture unit
+    gl.bindTexture(gl.TEXTURE_2D, fbo.texture);
+    // Set the clear color and enable the depth test
+    //gl.clearColor(0, 0, 0, 1);
+    gl.enable(gl.DEPTH_TEST);
     viewProjMatrixFromLight = new Matrix4(); // Prepare a view projection matrix for generating a shadow map
-    viewProjMatrixFromLight.setPerspective(70.0, canvas.width/canvas.height, 0.1, 300);
+    viewProjMatrixFromLight.setPerspective(200.0, OFFSCREEN_WIDTH/OFFSCREEN_HEIGHT, 1.0, 150.0);
     viewProjMatrixFromLight.lookAt(LIGHT_X, LIGHT_Y, LIGHT_Z, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
 
     // Model matrix
@@ -376,13 +376,8 @@ function onReadOBJFile(fileString, fileName, gl, o, scale, reverse) {
 }
 
 function draw(gl, canvas) {
+    gl.clearColor(0, 0, 0, 1);
     drawSkyBox(gl, canvas);
-
-    gl.activeTexture(gl.TEXTURE9); // Set a texture object to the texture unit
-    gl.bindTexture(gl.TEXTURE_2D, fbo.texture);
-    // Set the clear color and enable the depth test
-    //gl.clearColor(0, 0, 0, 1);
-    gl.enable(gl.DEPTH_TEST);
     setViewProjMatrix(canvas);
     drawShadow(gl, canvas);
     drawSolid(gl, canvas);
@@ -398,7 +393,7 @@ function drawShadow(gl, canvas) {
         drawObject(ObjectList[i], gl, shadowProgram, i);
         mvpMatrixFromLight[i].set(g_mvpMatrix);
     }
-    //drawTexture(gl, canvas, shadowProgram);
+    drawTexture(gl, canvas, shadowProgram);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);               // Change the drawing destination to color buffer
     gl.viewport(0, 0, canvas.width, canvas.height);
@@ -482,30 +477,35 @@ function drawTexture(gl, canvas, program) {
         // clear color and depth buffer
         deltaTime = getElapsedTime();
         fogDensity();
+
         //draw texture article
-        drawTextureArticle(floorRes, gl);
         drawTextureArticle(boxRes, gl);
+        drawTextureArticle(floorRes, gl);
     }
     else {
-        initAttributeVariable(gl, shadowProgram.a_Position, floorRes.vertexBuffer);
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, floorRes.indexBuffer);
-        modelMatrix.setTranslate(floorRes.translate[0], floorRes.translate[1], floorRes.translate[2]);
-        modelMatrix.scale(floorRes.scale[0], floorRes.scale[1], floorRes.scale[2]);
-        g_mvpMatrix.set(viewProjMatrixFromLight).multiply(modelMatrix);
-        gl.uniformMatrix4fv(shadowProgram.u_MvpMatrix, false, g_mvpMatrix.elements);
-        gl.drawElements(gl.TRIANGLES, floorRes.numIndices, floorRes.indexBuffer.type, 0);
-        mvpMatrixFromLight_floor.set(g_mvpMatrix);
+        if (floorRes.texureObject.isTextureImageReady) {
+            initAttributeVariable(gl, shadowProgram.a_Position, floorRes.vertexBuffer);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, floorRes.indexBuffer);
+            modelMatrix.setTranslate(floorRes.translate[0], floorRes.translate[1], floorRes.translate[2]);
+            modelMatrix.scale(floorRes.scale[0], floorRes.scale[1], floorRes.scale[2]);
+            g_mvpMatrix.set(viewProjMatrixFromLight).multiply(modelMatrix);
+            //console.log(g_mvpMatrix.elements);
+            gl.uniformMatrix4fv(shadowProgram.u_MvpMatrix, false, g_mvpMatrix.elements);
+            gl.drawElements(gl.TRIANGLES, floorRes.numIndices, floorRes.indexBuffer.type, 0);
+            mvpMatrixFromLight_floor.set(g_mvpMatrix);
+        }
         //console.log("set");
         //console.log(mvpMatrixFromLight_floor.elements);
-
-        initAttributeVariable(gl, shadowProgram.a_Position, boxRes.vertexBuffer);
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, boxRes.indexBuffer);
-        modelMatrix.setTranslate(boxRes.translate[0], boxRes.translate[1], boxRes.translate[2]);
-        modelMatrix.scale(boxRes.scale[0], boxRes.scale[1], boxRes.scale[2]);
-        g_mvpMatrix.set(viewProjMatrixFromLight).multiply(modelMatrix);
-        gl.uniformMatrix4fv(shadowProgram.u_MvpMatrix, false, g_mvpMatrix.elements);
-        gl.drawElements(gl.TRIANGLES, boxRes.numIndices, boxRes.indexBuffer.type, 0);
-        mvpMatrixFromLight_box.set(g_mvpMatrix);
+        if (boxRes.texureObject.isTextureImageReady) {
+            initAttributeVariable(gl, shadowProgram.a_Position, boxRes.vertexBuffer);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, boxRes.indexBuffer);
+            modelMatrix.setTranslate(boxRes.translate[0], boxRes.translate[1], boxRes.translate[2]);
+            modelMatrix.scale(boxRes.scale[0], boxRes.scale[1], boxRes.scale[2]);
+            g_mvpMatrix.set(viewProjMatrixFromLight).multiply(modelMatrix);
+            gl.uniformMatrix4fv(shadowProgram.u_MvpMatrix, false, g_mvpMatrix.elements);
+            gl.drawElements(gl.TRIANGLES, boxRes.numIndices, boxRes.indexBuffer.type, 0);
+            mvpMatrixFromLight_box.set(g_mvpMatrix);
+        }
     }
 }
 function fogDensity() {
@@ -578,6 +578,7 @@ function drawSolid(gl, canvas) {
     gl.uniform3fv(solidProgram.u_FogColor, fogColor); // fog colors
     // Starting point and end point
     gl.uniform2fv(solidProgram.u_FogDist, fogDist);
+    gl.uniform3fv(solidProgram.u_lightPosition, eye.elements);
     for(let i = 0; i < ObjectList.length; i++) {
         gl.uniformMatrix4fv(solidProgram.u_MvpMatrixFromLight, false, mvpMatrixFromLight[i].elements);
         drawObject(ObjectList[i], gl, solidProgram, i);
@@ -599,13 +600,11 @@ function drawObject(solidArticle, gl, program, i) {
                     // Calculate new currentAngle to make an animation.
                     currentAngle = (currentAngle + (90.0 * deltaTime) / 1000.0) % 360.0;
                     const angle = currentAngle * Math.PI / 180.0;
-                    //modelMatrix.translate(0, 5, 10);
                     modelMatrix.translate(10.0 * Math.sin(angle), 5.0 + 2 * Math.sin(angle * 2), 10.0 * Math.cos(angle));
-                    modelMatrix.rotate(currentAngle, 0.0, 1.0 , 0.0);
+                    modelMatrix.rotate(currentAngle + 180, 0.0, 1.0 , 0.0);
                     const z_angle = 45 * Math.cos(angle * 2);
-                    modelMatrix.rotate(z_angle , 0.0, 0.0 , 1.0);
-                    modelMatrix.rotate(currentAngle * 3, 1.0, 0.0 , 0.0);
-                    //console.log(z_angle);
+                    modelMatrix.rotate(z_angle* -1 , 0.0, 0.0 , 1.0);
+                    modelMatrix.rotate(currentAngle*3, 1.0, 0.0 , 0.0);
                 } else {
                     modelMatrix.translate(transform.content[0],
                         transform.content[1], transform.content[2]);
@@ -627,18 +626,19 @@ function drawObject(solidArticle, gl, program, i) {
             normalMatrix.transpose();
             // Set normal matrix.
             gl.uniformMatrix4fv(program.u_NormalMatrix, false, normalMatrix.elements);
-
             // Initialize texture variables.
             initAttributeVariable(gl, program.a_Position, solidArticle.model.vertexBuffer);
             initAttributeVariable(gl, program.a_Normal, solidArticle.model.normalBuffer);
             initAttributeVariable(gl, program.a_Color, solidArticle.model.colorBuffer);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, solidArticle.model.indexBuffer);
+            gl.drawElements(gl.TRIANGLES, solidArticle.drawingInfo.indices.length, gl.UNSIGNED_SHORT, 0);
         }else {
             g_mvpMatrix.set(viewProjMatrixFromLight).multiply(modelMatrix);
             gl.uniformMatrix4fv(shadowProgram.u_MvpMatrix, false, g_mvpMatrix.elements);
             initAttributeVariable(gl, shadowProgram.a_Position, solidArticle.model.vertexBuffer);
+            gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, solidArticle.model.indexBuffer);
+            gl.drawElements(gl.TRIANGLES, solidArticle.drawingInfo.indices.length, gl.UNSIGNED_SHORT, 0);
         }
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, solidArticle.model.indexBuffer);
-        gl.drawElements(gl.TRIANGLES, solidArticle.drawingInfo.indices.length, gl.UNSIGNED_SHORT, 0);
     }
 }
 function drawSkyBox(gl, canvas) {

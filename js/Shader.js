@@ -32,7 +32,7 @@ const TEXTURE_FSHADER_SOURCE =
     "uniform vec2 u_Floor;\n" +
     "varying vec4 v_PositionFromLight;\n" +
     "void main() {\n" +
-    "vec3 shadowCoord = (v_PositionFromLight.xyz/v_PositionFromLight.w)/2.0 + 0.5;\n" +
+    "vec3 shadowCoord = (v_PositionFromLight.xyz/v_PositionFromLight.w) / 2.0 + 0.5;\n" +
     "vec4 rgbaDepth = texture2D(u_ShadowMap, shadowCoord.xy);\n" +
     "float depth = rgbaDepth.r;\n" +
     "float visibility = (shadowCoord.z > depth + 0.005) ? 0.7 : 1.0;\n" +// Recalculate the z value from the rgba
@@ -65,10 +65,18 @@ const SOLID_VSHADER_SOURCE =
     "varying vec4 v_PositionFromLight;\n" +
     "varying vec4 v_Color;\n" +
     "varying float v_Dist;\n" +
+    "varying vec3 v_normalInternal;\n" +
+    "varying vec3 v_vertexPosition;\n" +
+    "varying vec3 ambientColor;\n" +
+    "varying vec3 diffuseColor;\n" +
     "void main() {\n" +
     "gl_Position = u_MvpMatrix * a_Position;\n" +
     // Recalculate the normal based on the model matrix and make its length 1.
     "vec3 normal = normalize(vec3(u_NormalMatrix * a_Normal));\n" +
+    // phong shading
+    "v_normalInternal = normal;\n" +
+    "vec4 modelVertex = u_ModelMatrix * a_Position;\n" +
+    "v_vertexPosition = vec3(modelVertex) / modelVertex.w;\n" +
     // The dot product of the light direction and the normal
     "float nDotL = max(dot(normal, u_DirectionLight), 0.0);\n" +
     // Calculate the color due to diffuse reflection of directional light
@@ -81,8 +89,10 @@ const SOLID_VSHADER_SOURCE =
     "float nDotL2 = max(dot(normal, pointLightDirection), 0.0);\n" +
     // Calculate the color due to diffuse reflection of point light
     "vec3 diffuse2 = u_PointLightColor * a_Color.rgb * nDotL2;\n" +
+    "diffuseColor = diffuse + diffuse2;\n" +
     // Calculate the color due to ambient reflection
     "vec3 ambient = u_AmbientLight * a_Color.rgb;\n" +
+    "ambientColor = ambient;\n" +
     // Mix ambient, diffuse, diffuse2.
     "v_Color = vec4(ambient + diffuse + diffuse2, a_Color.a);\n" +
     // Use the negative z value of each vertex in view coordinate system
@@ -98,17 +108,35 @@ const SOLID_FSHADER_SOURCE =
     "uniform vec2 u_FogDistance;\n" +
     "varying vec4 v_Color;\n" +
     "varying float v_Dist;\n" +
+    "varying vec3 v_normalInternal;\n" +
+    "varying vec3 v_vertexPosition;\n" +
+    "uniform vec3 lightPos;\n" +
+    "varying vec3 ambientColor;\n" +
+    "varying vec3 diffuseColor;\n" +
+    "const vec3 specColor = vec3(1.0, 1.0, 1.0);\n" +
     "varying vec4 v_PositionFromLight;\n" +
     "void main() {\n" +
     "vec3 shadowCoord = (v_PositionFromLight.xyz/v_PositionFromLight.w)/2.0 + 0.5;\n" +
     "vec4 rgbaDepth = texture2D(u_ShadowMap, shadowCoord.xy);\n" +
     "float depth = rgbaDepth.r;\n" +
     "float visibility = (shadowCoord.z > depth + 0.005) ? 0.7 : 1.0;\n" +// Recalculate the z value from the rgba
+    //phong shading
+    "vec3 lightDir = normalize(lightPos - v_vertexPosition);\n" +
+    "vec3 normal = v_normalInternal;\n" +
+    "vec3 reflectDir = reflect(-lightDir, normal);\n" +
+    "vec3 viewDir = normalize(-v_vertexPosition);\n" +
+    "float lambertian = max(dot(lightDir,normal), 0.0);\n" +
+    "float specular = 0.0;\n" +
+    "if(lambertian > 0.0) {\n" +
+    "float specAngle = max(dot(reflectDir, viewDir), 0.0);\n" +
+    "specular = pow(specAngle, 4.0);\n" +
+    "}\n" +
+    "vec3 phongColor = vec3(ambientColor + lambertian * diffuseColor + specular * specColor);\n" +
     // define fog parameter
     "float fog = (u_FogDistance.y - v_Dist) / (u_FogDistance.y - u_FogDistance.x);\n" +
     // Stronger fog as it gets further: u_FogColor * (1 - fogFactor) + v_Color * fogFactor
     "vec3 color = mix(u_FogColor, vec3(v_Color), clamp(fog, 0.0, 1.0));\n" +
-    "gl_FragColor = vec4(color *  visibility, v_Color.a);\n" +
+    "gl_FragColor = vec4(phongColor *  visibility, v_Color.a);\n" +
     "}\n";
 
 const SKYBOX_VSHADER_SOURCE = `
